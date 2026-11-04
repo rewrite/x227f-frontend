@@ -1,35 +1,34 @@
-use crate::DATABASE;
 use axum::Json;
+use axum::extract::State;
 use serde::Serialize;
 
+use super::ApiError;
+use crate::AppState;
+
 #[derive(Serialize)]
-pub struct StatsApiResponse {
-    buttons_link: usize,
-    buttons_no_link: usize,
-    unique_buttons: usize,
+pub struct Stats {
+    buttons_link: u64,
+    buttons_no_link: u64,
+    unique_buttons: u64,
 }
 
-pub async fn stats_api_route() -> Json<StatsApiResponse> {
-    let db = {
-        let db = DATABASE.lock().await;
-        db.try_clone().unwrap()
-    };
-
-    let mut stmt = db.prepare("SELECT (SELECT count(*) FROM pages WHERE link IS NOT NULL),(SELECT count(*) FROM pages WHERE link IS NULL);").unwrap();
-    let (buttons_link, buttons_no_link) = stmt
-        .query_row([], |r| {
-            Ok((r.get::<_, usize>(0).unwrap(), r.get::<_, usize>(1).unwrap()))
+pub async fn stats_api_route(State(state): State<AppState>) -> Result<Json<Stats>, ApiError> {
+    let stats = state
+        .db
+        .run(|db| {
+            db.query_row(
+                "SELECT count(link), count(*) - count(link), count(DISTINCT sha256) FROM pages",
+                [],
+                |r| {
+                    Ok(Stats {
+                        buttons_link: r.get(0)?,
+                        buttons_no_link: r.get(1)?,
+                        unique_buttons: r.get(2)?,
+                    })
+                },
+            )
         })
-        .unwrap();
+        .await?;
 
-    let mut stmt = db
-        .prepare("SELECT count(*) FROM (SELECT DISTINCT sha256 FROM pages);")
-        .unwrap();
-    let unique_buttons = stmt.query_row([], |r| r.get::<_, usize>(0)).unwrap();
-    
-    Json(StatsApiResponse {
-        buttons_link,
-        buttons_no_link,
-        unique_buttons,
-    })
+    Ok(Json(stats))
 }

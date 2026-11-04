@@ -1,4 +1,4 @@
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -50,7 +50,7 @@
             let searchBacklinks = document.getElementById("search-backlinks").checked;
             let searches = 0;
             searches |= searchFilenames << 3 | searchNames << 2 | searchLinksTo << 1 | searchBacklinks << 0;
-            window.location.href = "/search#" + searches + "," + query;
+            window.location.href = "/search#" + searches + "," + encodeURIComponent(query);
         }
 
         init();

@@ -1,25 +1,18 @@
-use crate::DATABASE;
-use axum::extract::Path;
-use axum::http::StatusCode;
 use axum::Json;
-use duckdb::types::Value;
+use axum::extract::{Path, State};
 use serde::Serialize;
 
-#[derive(Serialize)]
-pub enum ButtonApiResponse {
-    #[serde(rename = "info")]
-    Button(ButtonInfo),
-    #[serde(rename = "error")]
-    Error(String),
-}
+use super::{ApiError, Info};
+use crate::AppState;
 
 #[derive(Serialize)]
 pub struct ButtonInfo {
     pages: Vec<PageInfo>,
 }
 
+/// One place the button was found on.
 #[derive(Serialize)]
-pub struct PageInfo {
+struct PageInfo {
     backlink: String,
     link: Option<String>,
     alt: Option<String>,
@@ -27,64 +20,32 @@ pub struct PageInfo {
     filename: Option<String>,
 }
 
-pub async fn button_api_route(Path(hash): Path<String>) -> (StatusCode, Json<ButtonApiResponse>) {
-    // make sure that the hash is a valid hash
-    if hash.len() > 32 || hash.chars().any(|c| !c.is_ascii_hexdigit()) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(ButtonApiResponse::Error("Invalid hash".to_string())),
-        );
+pub async fn button_api_route(
+    State(state): State<AppState>,
+    Path(hash): Path<String>,
+) -> Result<Json<Info<ButtonInfo>>, ApiError> {
+    if hash.len() > 32 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(ApiError::BadRequest("Invalid hash"));
     }
-	
-    let db = {
-        let db = DATABASE.lock().await;
-        db.try_clone().unwrap()
-    };
-    
-    let mut stmt = db
-        .prepare("SELECT page,link,alt,title,filename FROM pages WHERE sha256 = ?")
-        .unwrap();
 
-    let rows = stmt
-        .query_map([hash], |r| {
-            let Value::Text(backlink) = r.get(0).unwrap() else {
-                unreachable!()
-            };
-            let link = if let Value::Text(t) = r.get(1).unwrap() {
-                Some(t)
-            } else {
-                None
-            };
-            let alt = if let Value::Text(t) = r.get(2).unwrap() {
-                Some(t)
-            } else {
-                None
-            };
-            let title = if let Value::Text(t) = r.get(3).unwrap() {
-                Some(t)
-            } else {
-                None
-            };
-            let filename = if let Value::Text(t) = r.get(4).unwrap() {
-                Some(t)
-            } else {
-                None
-            };
-
-            Ok(PageInfo {
-                backlink,
-                link,
-                alt,
-                title,
-                filename,
-            })
+    let pages = state
+        .db
+        .run(move |db| {
+            db.prepare("SELECT page, link, alt, title, filename FROM pages WHERE sha256 = ?")?
+                .query_map([hash], |r| {
+                    Ok(PageInfo {
+                        backlink: r.get(0)?,
+                        link: r.get(1)?,
+                        alt: r.get(2)?,
+                        title: r.get(3)?,
+                        filename: r.get(4)?,
+                    })
+                })?
+                .collect()
         })
-        .unwrap();
+        .await?;
 
-    let pages = rows.map(Result::unwrap).collect();
-
-    (
-        StatusCode::OK,
-        Json(ButtonApiResponse::Button(ButtonInfo { pages })),
-    )
+    Ok(Json(Info {
+        info: ButtonInfo { pages },
+    }))
 }

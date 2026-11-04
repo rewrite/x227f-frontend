@@ -1,25 +1,23 @@
-use crate::DATABASE;
-use axum::extract::Path;
 use axum::Json;
+use axum::extract::{Path, State};
+use duckdb::{Connection, Row};
 use serde::Serialize;
 
+use super::{ApiError, Info};
+use crate::AppState;
+
 #[derive(Serialize)]
-pub enum PageApiResponse {
-    #[serde(rename = "info")]
-    Info(PageInfo),
+pub struct PageInfo {
+    /// Buttons on other pages that link to this page.
+    backlinks: Vec<PageButton>,
+    /// Buttons on this page, with the page each one links to.
+    buttons: Vec<PageButton>,
 }
 
 #[derive(Serialize)]
-pub struct PageAndButton {
-    page: String, 
-    button: String,
-    alt: Option<String>,
-    title: Option<String>,
-    filename: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct MaybePageAndButton {
+struct PageButton {
+    /// The page on the other end: the linking page for a backlink, the linked
+    /// page for a button (if the button links anywhere).
     page: Option<String>,
     button: String,
     alt: Option<String>,
@@ -27,54 +25,43 @@ pub struct MaybePageAndButton {
     filename: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct PageInfo {
-    backlinks: Vec<PageAndButton>,
-    buttons: Vec<MaybePageAndButton>,
+impl PageButton {
+    fn from_row(r: &Row) -> duckdb::Result<Self> {
+        Ok(Self {
+            page: r.get(0)?,
+            button: r.get(1)?,
+            alt: r.get(2)?,
+            title: r.get(3)?,
+            filename: r.get(4)?,
+        })
+    }
 }
 
-pub async fn page_api_route(page: Path<String>) -> Json<PageApiResponse> {
-    let page = page.0;
-    let db = {
-        let db = DATABASE.lock().await;
-        db.try_clone().unwrap()
-    };
+fn query(db: &Connection, sql: &str, page: &str) -> duckdb::Result<Vec<PageButton>> {
+    db.prepare(sql)?.query_map([page], PageButton::from_row)?.collect()
+}
 
-    // Get pages that link to this site
-    let mut stmt = db
-        .prepare("SELECT page,sha256,alt,title,filename FROM pages WHERE link = ?")
-        .unwrap();
-    let backlinks = stmt
-        .query_map([&page], |r| {
-            Ok(PageAndButton {
-                page: r.get::<_, String>(0).unwrap(),
-                button: r.get::<_, String>(1).unwrap(),
-                alt: r.get::<_, String>(2).ok(),
-                title: r.get::<_, String>(3).ok(),
-                filename: r.get::<_, String>(4).ok(),
+pub async fn page_api_route(
+    State(state): State<AppState>,
+    Path(page): Path<String>,
+) -> Result<Json<Info<PageInfo>>, ApiError> {
+    let info = state
+        .db
+        .run(move |db| {
+            Ok(PageInfo {
+                backlinks: query(
+                    db,
+                    "SELECT page, sha256, alt, title, filename FROM pages WHERE link = ?",
+                    &page,
+                )?,
+                buttons: query(
+                    db,
+                    "SELECT link, sha256, alt, title, filename FROM pages WHERE page = ?",
+                    &page,
+                )?,
             })
         })
-        .unwrap();
-    let backlinks = backlinks.map(Result::unwrap).collect::<Vec<PageAndButton>>();
+        .await?;
 
-    // Get pages that this site links to
-    let mut stmt = db
-        .prepare("SELECT link,sha256,alt,title,filename FROM pages WHERE page = ?")
-        .unwrap();
-    let buttons = stmt
-        .query_map([&page], |r| {
-            Ok(MaybePageAndButton {
-                page: r.get::<_, String>(0).ok(),
-                button: r.get::<_, String>(1).unwrap(),
-                alt: r.get::<_, String>(2).ok(),
-                title: r.get::<_, String>(3).ok(),
-                filename: r.get::<_, String>(4).ok(),
-            })
-        })
-        .unwrap();
-    let buttons = buttons
-        .map(Result::unwrap)
-        .collect::<Vec<MaybePageAndButton>>();
-
-    Json(PageApiResponse::Info(PageInfo { backlinks, buttons }))
+    Ok(Json(Info { info }))
 }

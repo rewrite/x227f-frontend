@@ -6,9 +6,9 @@
     <link rel="stylesheet" href="style.css">
     <script>
         function enc(inp) {
-            return inp.replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("&", "&amp;")
+            return String(inp).replace(/[&<>"']/g, c => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            })[c]);
         }
 
         async function init() {
@@ -37,12 +37,12 @@
                 let filename = page["filename"]
 
                 let li = document.createElement("li")
-                li.innerHTML = `<a target="_blank" href="//${backlink}">${backlink}</a>`
-                             + ` <small>(<a href="/page#${backlink}">i</a>)</small>`
+                li.innerHTML = `<a target="_blank" href="//${enc(backlink)}">${enc(backlink)}</a>`
+                             + ` <small>(<a href="/page#${enc(backlink)}">i</a>)</small>`
                 if (link != null) {
                     li.innerHTML += " -&gt; "
-                                  + ` <a target="_blank" href="//${link}">${link}</a>`
-                                  + ` <small>(<a href="/page#${link}">i</a>)</small>`;
+                                  + ` <a target="_blank" href="//${enc(link)}">${enc(link)}</a>`
+                                  + ` <small>(<a href="/page#${enc(link)}">i</a>)</small>`;
                 }
                 if (alt != null || title != null || filename != null) {
                     li.innerHTML += " ("

@@ -6,14 +6,14 @@
     <link rel="stylesheet" href="style.css">
     <script>
         function enc(inp) {
-            return inp.replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("&", "&amp;")
+            return String(inp).replace(/[&<>"']/g, c => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            })[c]);
         }
 
         async function init() {
             let page = window.location.hash.substring(1);
-            document.getElementById("title").innerHTML = `Page: <a href="//${page}">${page}</a>`;
+            document.getElementById("title").innerHTML = `Page: <a href="//${enc(page)}">${enc(page)}</a>`;
             let res = await fetch("/api/page/" + encodeURIComponent(page));
             let resJson = JSON.parse(await res.text());
             let backlinks = document.getElementById("backlinks");
@@ -25,9 +25,9 @@
                 let title = backlink["title"];
                 let filename = backlink["filename"];
                 let li = document.createElement("li");
-                li.innerHTML = `<a href="/button#${buttonHash}"><img src="/api/button/${buttonHash}/img" alt="Button" class="button"></a>`
-                             + ` <a target="_blank" href="//${page}">${page}</a>`
-                             + ` <small>(<a href=\"/page#${page}">i</a>)</small>`;
+                li.innerHTML = `<a href="/button#${enc(buttonHash)}"><img src="/api/button/${enc(buttonHash)}/img" alt="Button" class="button"></a>`
+                             + ` <a target="_blank" href="//${enc(page)}">${enc(page)}</a>`
+                             + ` <small>(<a href=\"/page#${enc(page)}">i</a>)</small>`;
                 if (alt != null || title != null || filename != null) {
                     li.innerHTML += " ("
                         + [
@@ -48,10 +48,10 @@
                 let title = button["title"];
                 let filename = button["filename"];
                 let li = document.createElement("li");
-                li.innerHTML = `<a href="/button#${buttonHash}"><img src="/api/button/${buttonHash}/img" alt="Button" class="button"></a>`
+                li.innerHTML = `<a href="/button#${enc(buttonHash)}"><img src="/api/button/${enc(buttonHash)}/img" alt="Button" class="button"></a>`
                 if (page !== null) {
-                    li.innerHTML += ` <a href="//${page}">${page}</a>`
-                                  + ` <small>(<a href="/page#${page}\">i</a>)</small>`;
+                    li.innerHTML += ` <a href="//${enc(page)}">${enc(page)}</a>`
+                                  + ` <small>(<a href="/page#${enc(page)}\">i</a>)</small>`;
                 }
                 if (alt != null || title != null || filename != null) {
                     li.innerHTML += " ("

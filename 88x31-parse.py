@@ -1,60 +1,66 @@
-file = "88x31.json"
+"""Builds 88x31.ddb from 88x31.json, which x227f writes.
 
-import duckdb
+Each row of the `pages` table is one button on one page. A child process
+streams the rows as newline-delimited JSON into DuckDB's stdin, so they're
+never all in memory or written to disk at once.
+
+usage: python3 88x31-parse.py
+"""
+
 import json
 import os
+import subprocess
+import sys
+
+import duckdb
+
+COLUMNS = "{page: 'VARCHAR', link: 'VARCHAR', sha256: 'VARCHAR', alt: 'VARCHAR', title: 'VARCHAR', filename: 'VARCHAR'}"
+
+
+def write_rows(out):
+    with open("88x31.json") as f:
+        j = json.load(f)
+    pages, texts, buttons = j["pages"], j["texts"], j["buttons"]
+
+    def text(i):
+        return texts[i] if i is not None else None
+
+    for page, links, bs, alts, titles, filenames in zip(
+        pages,
+        j["links"],
+        j["link_buttons"],
+        j["link_button_alts"],
+        j["link_button_titles"],
+        j["link_button_filenames"],
+    ):
+        for l, b, ba, bt, bf in zip(links, bs, alts, titles, filenames):
+            row = {
+                "page": page,
+                "link": pages[l] if l is not None else None,
+                "sha256": buttons[b],
+                "alt": text(ba),
+                "title": text(bt),
+                "filename": text(bf),
+            }
+            out.write(json.dumps(row) + "\n")
+
+
+if sys.argv[1:] == ["--rows"]:
+    write_rows(sys.stdout)
+    sys.exit()
+
+print("parsing pages")
+rows = subprocess.Popen([sys.executable, __file__, "--rows"], stdout=subprocess.PIPE)
+os.dup2(rows.stdout.fileno(), sys.stdin.fileno())
 
 db = duckdb.connect("88x31.ddb")
-
-store = open(file)
-j = json.load(store)
-
-# Make sure that all tables are clean
 db.sql("DROP TABLE IF EXISTS pages")
-
-pages = []
-print("parsing pages")
-for (
-    page,
-    links_idx,
-    buttons_idx,
-    button_alts_idx,
-    button_titles_idx,
-    button_filenames_idx,
-) in zip(
-    j["pages"],
-    j["links"],
-    j["link_buttons"],
-    j["link_button_alts"],
-    j["link_button_titles"],
-    j["link_button_filenames"],
-):
-    for l, b, ba, bt, bf in zip(
-        links_idx, buttons_idx, button_alts_idx, button_titles_idx, button_filenames_idx
-    ):
-        link = j["pages"][l] if l is not None else None
-        sha256 = j["buttons"][b]
-        alt = j["texts"][ba] if ba is not None else None
-        title = j["texts"][bt] if bt is not None else None
-        filename = j["texts"][bf] if bf is not None else None
-        pages.append(
-            {
-                "page": page,
-                "link": link,
-                "sha256": sha256,
-                "alt": alt,
-                "title": title,
-                "filename": filename,
-            }
-        )
-print("writing to db...")
-with open("TMPpages.json", "x") as f:
-    f.write(json.dumps(pages))
-
-# Table containing records of pages and what which buttons they contain (one page->button per record)
 db.sql(
-    "CREATE TABLE pages AS SELECT * FROM read_json('TMPpages.json', columns={page: 'VARCHAR', link: 'VARCHAR', sha256: 'VARCHAR', alt: 'VARCHAR', title: 'VARCHAR', filename: 'VARCHAR'})"
+    "CREATE TABLE pages AS SELECT * FROM "
+    f"read_json('/dev/stdin', format='newline_delimited', columns={COLUMNS})"
 )
-os.remove("TMPpages.json")
-
+if rows.wait() != 0:
+    sys.exit("writing rows failed")
+print(db.execute("SELECT count(*) FROM pages").fetchone()[0], "rows in db")
+db.close()
 print("parsing pages done!")

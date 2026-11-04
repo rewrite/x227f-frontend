@@ -1,7 +1,9 @@
-use crate::DATABASE;
-use axum::extract::Query;
 use axum::Json;
+use axum::extract::{Query, State};
 use serde::{Deserialize, Serialize};
+
+use super::ApiError;
+use crate::AppState;
 
 #[derive(Deserialize)]
 pub struct QueryParams {
@@ -13,24 +15,22 @@ pub struct Hashes {
     hashes: Vec<String>,
 }
 
-pub async fn random_api_route(q: Query<QueryParams>) -> Json<Hashes> {
-    let amount = q.amount.clamp(1, 1000);
+pub async fn random_api_route(
+    State(state): State<AppState>,
+    Query(QueryParams { amount }): Query<QueryParams>,
+) -> Result<Json<Hashes>, ApiError> {
+    // safe to format into the query since it's just a number
+    let amount = amount.clamp(1, 1000);
+    let hashes = state
+        .db
+        .run(move |db| {
+            db.prepare(&format!(
+                "SELECT sha256 FROM (SELECT DISTINCT sha256 FROM pages) USING SAMPLE {amount} ROWS"
+            ))?
+            .query_map([], |r| r.get(0))?
+            .collect()
+        })
+        .await?;
 
-    let db = {
-        let db = DATABASE.lock().await;
-        db.try_clone().unwrap()
-    };
-
-    let mut stmt = db
-        .prepare(&format!(
-            "SELECT sha256 FROM (SELECT DISTINCT sha256 FROM pages) USING SAMPLE {amount}"
-        ))
-        .unwrap();
-    let mut rows = stmt.query([]).unwrap();
-    let mut hashes: Vec<String> = vec![];
-    while let Ok(Some(row)) = rows.next() {
-        hashes.push(row.get(0).unwrap());
-    }
-
-    Json(Hashes { hashes })
+    Ok(Json(Hashes { hashes }))
 }

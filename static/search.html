@@ -6,12 +6,17 @@
     <link rel="stylesheet" href="style.css">
     <script>
         async function init() {
-            let searches_query = window.location.hash.substring(1).split(",", 2);
-            let searches = searches_query[0];
-            let query = searches_query[1];
+            // "<flags>,<query>", and the query itself may contain commas
+            let hash = decodeURIComponent(window.location.hash.substring(1));
+            let comma = hash.indexOf(",");
+            let searches = hash.substring(0, comma);
+            let query = hash.substring(comma + 1);
             let res = await fetch("/api/search?query=" + encodeURIComponent(query) + "&search_in=" + searches);
             let resJson = JSON.parse(await res.text());
-            if (res.status !== 200) document.body.innerText = "Search failed: " + resJson["error"];
+            if (res.status !== 200) {
+                document.body.innerText = "Search failed: " + resJson["error"];
+                return;
+            }
             let results = resJson["results"];
             let buttons = document.getElementById("buttons");
             for (let hash of results) {

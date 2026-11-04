@@ -1,1 +1,6 @@
 /target
+/.venv
+/buttons
+/88x31.json
+/88x31.ddb
+/frontend.log
