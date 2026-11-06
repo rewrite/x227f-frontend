@@ -53,6 +53,21 @@
             window.location.href = "/search#" + searches + "," + encodeURIComponent(query);
         }
 
+        function swapPath() {
+            let from = document.getElementById("path-from");
+            let to = document.getElementById("path-to");
+            [from.value, to.value] = [to.value, from.value];
+        }
+
+        function separation() {
+            let params = new URLSearchParams({
+                from: document.getElementById("path-from").value.trim(),
+                to: document.getElementById("path-to").value.trim(),
+            });
+            if (params.get("from") === "" || params.get("to") === "") return;
+            window.location.href = "/path#" + params.toString();
+        }
+
         init();
     </script>
 </head>
@@ -65,39 +80,47 @@
     <h2>feeling lucky? <a href="/random">show random buttons!</a></h2>
     <h2>search buttons</h2>
     <label>
-        <input id="search-query" placeholder="query...">
+        <input id="search-query" onkeydown="if (event.key === 'Enter') search()" placeholder="query...">
     </label>
     <button id="search-button" onclick="search()">search!</button>
     <p><small>use % for a 0-inf character wildcard and _ for a single character wildcard</small></p>
     <p class="no-left-padding">
         search in
         <label>
-            <input id="search-names" type="checkbox" checked>
+            <input id="search-names" onkeydown="if (event.key === 'Enter') search()" type="checkbox" checked>
             alts and titles that it has
         </label>
         <label>
-            <input id="search-filenames" type="checkbox" checked>
+            <input id="search-filenames" onkeydown="if (event.key === 'Enter') search()" type="checkbox" checked>
             filenames that it has
         </label>
         <label>
-            <input id="search-links-to" type="checkbox">
+            <input id="search-links-to" onkeydown="if (event.key === 'Enter') search()" type="checkbox">
             sites that it links to
         </label>
         <label>
-            <input id="search-backlinks" type="checkbox">
+            <input id="search-backlinks" onkeydown="if (event.key === 'Enter') search()" type="checkbox">
             sites that use it
         </label>
     </p>
 
+    <h2>degrees of separation</h2>
+    <form onsubmit="separation(); return false;">
+        <label><input id="path-from" placeholder="from page..."></label>
+        <button type="button" onclick="swapPath()">⇄</button>
+        <label><input id="path-to" placeholder="to page..."></label>
+        <button type="submit">find!</button>
+    </form>
+
     <h2>go to</h2>
     <label>
-        <select id="goto-what">
+        <select id="goto-what" onkeydown="if (event.key === 'Enter') goto()">
             <option value="page">page</option>
             <option value="button">button (by hash)</option>
         </select>
     </label>
     <label>
-        <input id="goto-query" placeholder="go where?">
+        <input id="goto-query" onkeydown="if (event.key === 'Enter') goto()" placeholder="go where?">
     </label>
     <button onclick="goto()">go</button>
     <div class="no-left-padding" id="stats">

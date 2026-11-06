@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Degrees of Separation</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        function enc(inp) {
+            return String(inp).replace(/[&<>"']/g, c => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            })[c]);
+        }
+
+        // the search lives in the hash as "from=...&to=..."
+        async function init() {
+            let params = new URLSearchParams(window.location.hash.substring(1));
+            let from = params.get("from"), to = params.get("to");
+            let result = document.getElementById("result");
+            if (!from || !to) {
+                result.innerHTML = '<h2>search from the <a href="/">home page</a></h2>';
+                return;
+            }
+
+            result.innerHTML = "<p>searching...</p>";
+            let res = await fetch("/api/path?" + new URLSearchParams({ from, to }));
+            let resJson = JSON.parse(await res.text());
+            if (res.status !== 200) {
+                result.innerHTML = "<h2>" + enc(resJson["error"]) + "</h2>";
+                return;
+            }
+            let path = resJson["info"]["path"];
+            if (path === null) {
+                result.innerHTML = `<h2>no path found (${enc(from)} -> ${enc(to)})</h2>`;
+                return;
+            }
+
+            let degrees = path.length - 1;
+            let html = "<h2>" + degrees + (degrees === 1 ? " degree" : " degrees") + " of separation"
+                + ` (${enc(path[0].page)} -> ${enc(path[degrees].page)})</h2><ul>`;
+            // each row is the button that leads to a page, then that page, like on /page
+            let button = null;
+            for (let step of path) {
+                let img = button === null ? "" : `<a href="/button#${enc(button)}"><img `
+                    + `src="/api/button/${enc(button)}/img" alt="Button" class="button"></a> `;
+                html += "<li>" + img
+                    + `<a target="_blank" href="//${enc(step.page)}">${enc(step.page)}</a>`
+                    + ` <small>(<a href="/page#${enc(step.page)}">i</a>)</small></li>`;
+                button = step.button;
+            }
+            result.innerHTML = html + "</ul>";
+        }
+
+        window.onload = init;
+        window.onhashchange = init;
+    </script>
+</head>
+<body>
+<small><a href="/">home</a></small>
+<br>
+<div id="result"></div>
+</body>
+</html>

@@ -1,5 +1,6 @@
 mod button;
 mod page;
+mod path;
 mod random;
 mod search;
 mod stats;
@@ -20,6 +21,7 @@ pub fn router(state: AppState) -> Router {
         .route("/button", html(include_str!("../../static/button.html")))
         .route("/random", html(include_str!("../../static/random.html")))
         .route("/page", html(include_str!("../../static/page.html")))
+        .route("/path", html(include_str!("../../static/path.html")))
         .route("/search", html(include_str!("../../static/search.html")))
         .route(
             "/style.css",
@@ -28,6 +30,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/page/{page}", get(page::page_api_route))
         .route("/api/button/{hash}", get(button::button_api_route))
         .route("/api/button/{hash}/img", get(button_img_route))
+        .route("/api/path", get(path::path_api_route))
         .route("/api/search", get(search::search_api_route))
         .route("/api/random", get(random::random_api_route))
         .route("/api/stats", get(stats::stats_api_route))
