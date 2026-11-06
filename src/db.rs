@@ -1,9 +1,3 @@
-//! Read-only access to the `pages` table in 88x31.ddb.
-//!
-//! Each row is one button on one page: `page` (where the button is shown),
-//! `link` (where it links to, if anywhere), `sha256` (the button's hash) and
-//! the button's `alt`, `title` and `filename`, if it has them.
-
 use std::sync::{Arc, Mutex};
 
 use duckdb::{AccessMode, Config, Connection};

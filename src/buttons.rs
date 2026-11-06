@@ -1,5 +1,3 @@
-//! Every button image, kept in memory and looked up by hash.
-
 use std::collections::HashMap;
 use std::path::Path;
 use std::{fs, io};
